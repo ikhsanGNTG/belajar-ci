@@ -157,6 +157,8 @@ public function costs()
 
 public function buy()
 { 
+    helper(['transaksi_helper', 'number', 'form']);
+
     $cartItems = $this->cart->contents();
 
     if (empty($cartItems)) {
@@ -171,14 +173,30 @@ public function buy()
         $subtotal += $item['qty'] * $item['price'];
     }
 
-    $ongkir = (int) $this->request->getPost('ongkir');
+    $ongkir = (float) $this->request->getPost('ongkir');
+
+    $total_harga_sebelum_admin_cashback = (float) $subtotal;
+
+    // Read coupon code from form (diskon dihitung dari total sebelum admin & cashback)
+    $kupon_code = $this->request->getPost('kupon_code');
+
+    $biaya_admin = hitung_biaya_admin($total_harga_sebelum_admin_cashback);
+    $diskon_kupon = hitung_diskon_kupon($total_harga_sebelum_admin_cashback, $kupon_code);
+    $cashback = hitung_cashback($total_harga_sebelum_admin_cashback);
+
+    // total yang disimpan: subtotal - diskon_kupon + biaya_admin + cashback + ongkir
+    $grand_total = $subtotal - $diskon_kupon + $biaya_admin + $cashback + $ongkir;
 
     $transaction = [
-        'username'    => $this->request->getPost('username'),
-        'alamat'      => $this->request->getPost('alamat'),
-        'ongkir'      => $ongkir,
-        'total_harga' => $subtotal + $ongkir,
-        'status'      => 0, 
+        'username'      => $this->request->getPost('username'),
+        'alamat'        => $this->request->getPost('alamat'),
+        'ongkir'        => $ongkir, 
+        'total_harga'   => $grand_total,
+        'biaya_admin'   => $biaya_admin,
+        'kupon_code'    => $kupon_code ? strtoupper(trim((string)$kupon_code)) : null,
+        'diskon_kupon'  => $diskon_kupon,
+        'cashback'      => $cashback,
+        'status'        => 0,
     ];
 
     // insert transaction
@@ -196,7 +214,7 @@ public function buy()
             'product_id'     => $item['id'],
             'jumlah'         => $item['qty'],
             'diskon'         => 0,
-            'subtotal_harga' => $item['qty'] * $item['price'] 
+            'subtotal_harga' => $item['qty'] * $item['price']
         ]);
     }
 

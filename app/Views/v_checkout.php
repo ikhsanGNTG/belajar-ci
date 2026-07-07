@@ -7,6 +7,11 @@
 
 <?= form_hidden('username', session()->get('username')) ?>
 <?= form_hidden('total_harga', '') ?>
+<?= form_hidden('kupon_code', '') ?>
+<?= form_hidden('diskon_kupon', '0') ?>
+<?= form_hidden('biaya_admin', '0') ?>
+<?= form_hidden('cashback', '0') ?>
+<?= form_hidden('grand_total', '') ?>
 
 <div class="col-12">
     <?= form_label('Nama', 'nama', ['class' => 'form-label']) ?>
@@ -39,6 +44,12 @@
         'id'       => 'ongkir',
         'class'    => 'form-control',
         'readonly' => true]) ?>
+</div>
+
+<div class="col-12">
+<?= form_label('Kupon Promo', 'kupon_code_input', ['class' => 'form-label']) ?>
+    <input type="text" name="kupon_code_input" id="kupon_code_input" class="form-control" placeholder="Tersedia: HEMAT (15%), SUPER (20%)" />
+    <input type="hidden" name="kupon_code" id="kupon_code" value="" />
 </div>
 <div class="col-12">
     <?= form_submit(
@@ -78,11 +89,31 @@
       <tr>
           <td colspan="2"></td>
           <td>Subtotal</td>
-          <td><?= number_to_currency($total, 'IDR') ?></td>
+          <td id="subtotal_show"><?= number_to_currency($total, 'IDR') ?></td>
       </tr>
       <tr>
           <td colspan="2"></td>
-          <td>Total</td>
+          <td>Diskon Kupon</td>
+          <td><span id="diskon_kupon_show">Rp 0</span></td>
+      </tr>
+      <tr>
+          <td colspan="2"></td>
+          <td>Biaya Admin</td>
+          <td><span id="biaya_admin_show">Rp 0</span></td>
+      </tr>
+      <tr>
+          <td colspan="2"></td>
+          <td>Cashback</td>
+          <td><span id="cashback_show">Rp 0</span></td>
+      </tr>
+      <tr>
+          <td colspan="2"></td>
+          <td>Subtotal ( +Admin-Kupon )</td>
+          <td><span id="subtotal_admin_kupon_show"><?= number_to_currency($total, 'IDR') ?></span></td>
+      </tr>
+      <tr>
+          <td colspan="2"></td>
+          <td>Grand Total (incl. Ongkir)</td>
           <td><span id="total"><?= number_to_currency($total, 'IDR') ?></span></td>
       </tr>
   </tbody>
@@ -98,12 +129,56 @@ let ongkir = 0;
 let subtotal = <?= $total ?>;
 hitungTotal();
 
+// update perhitungan saat kupon diketik
+$('#kupon_code_input').on('input', function() {
+    hitungTotal();
+});
+
+
+function formatIDR(num) {
+    return 'Rp ' + Math.round(num).toLocaleString('id-ID');
+}
+
+function hitungAdminKuponCashback() {
+    const kupon = ($('#kupon_code_input').val() || '').trim().toUpperCase();
+
+    // helper logic must match server
+    const biayaAdmin = (subtotal <= 20000000) ? (subtotal * 0.005) : (subtotal * 0.0075);
+
+    let diskonRate = 0;
+    if (kupon === 'HEMAT') diskonRate = 0.15;
+    if (kupon === 'SUPER') diskonRate = 0.20;
+
+    const diskonKupon = subtotal * diskonRate;
+    const cashback = (subtotal > 10000000) ? (subtotal * 0.02) : 0;
+
+    // update hidden inputs for server
+    $('#kupon_code').val(kupon || '');
+    $('#diskon_kupon').val(diskonKupon);
+    $('#biaya_admin').val(biayaAdmin);
+    $('#cashback').val(cashback);
+
+    // subtotal (+admin - kupon)
+    const subtotalAdminKupon = subtotal - diskonKupon + biayaAdmin;
+    $('#subtotal_admin_kupon_show').text(formatIDR(subtotalAdminKupon));
+
+    // grand total includes ongkir and cashback per spec
+    const grandTotal = subtotalAdminKupon + cashback + ongkir;
+    $('#grand_total').val(grandTotal);
+
+    $('#diskon_kupon_show').text(formatIDR(diskonKupon));
+    $('#biaya_admin_show').text(formatIDR(biayaAdmin));
+    $('#cashback_show').text(formatIDR(cashback));
+
+    return grandTotal;
+}
+
 function hitungTotal() {
-    let total = subtotal + ongkir;
+    let grandTotal = hitungAdminKuponCashback();
 
     $("#ongkir").val(ongkir);
-    $("#total").text(`IDR ${total.toLocaleString('id-ID')}`);
-    $("#total_harga").val(total);
+    $("#total").text(`IDR ${Math.round(grandTotal).toLocaleString('id-ID')}`);
+    $("#total_harga").val(grandTotal);
 }
 
 	$('#kelurahan').select2({
